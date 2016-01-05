@@ -1,12 +1,13 @@
 import itertools
-import urllib2 as u
+#import urllib2 as u
 import pandas as pd
 
+from urllib import robotparser
+from urllib import request as u
 import plotly.plotly as py
 import plotly.graph_objs as go
 import plotly.tools as tls
 
-import robotparser
 from bs4 import BeautifulSoup
 
 from income import SalaryEstimates
@@ -27,9 +28,9 @@ def allow():
     '''
 
     rp = robotparser.RobotFileParser()
-    rp.set_url("http://www.indeed.com/robots.txt")
+    rp.set_url("http://be.indeed.com/robots.txt")
     rp.read()
-    access = rp.can_fetch("*","http://www.indeed.com/jobs?q=python+analyst&l=CA" )
+    access = rp.can_fetch("*","http://be.indeed.com/jobs?q=python+analyst&l=CA" )
     return access
 
 
@@ -53,18 +54,20 @@ class Parser:
 
         # To check for access of the scraping process.
         if not x:
-            print "defies the site rules"
+            print("defies the site rules")
             quit()
 
         # Once access is granted then the process starts parsing the data by first comparing the number/
         # of jobs available and returning the facts and figures.
         for text in soup.find_all("div", id="searchCount"):
-            self.data = str(text.get_text()[16:]).replace(",","")
+            self.data = str(text.get_text()).split(' ')[-1]
             job2 = job.replace("+", " ")
             Dict[job2] = self.data
+        print(Dict)
+        print(Dict)
 
-        self.df = pd.DataFrame(Dict.items(), columns=['jobs', 'number of openings'])
-        self.df = self.df.apply(pd.to_numeric, errors='ignore')
+        self.df = pd.DataFrame(data = Dict, columns=['jobs', 'number of openings'])
+        #self.df = self.df.apply(pd.to_numeric, errors='ignore')
         return self.df
 
     def graph_parsed_data(self, username, api_key):
@@ -126,16 +129,22 @@ class TextParser:
 # main module that manages all the other modules in the  script
 def main(jobs):
 
-    username = raw_input("please enter your Plotly Username: \n")
-    api_key = raw_input("please enter your Plotly Api Key: \n")
-    state = "CA"
+    username = "tabias@gmail.com" #input("please enter your Plotly Username: \n")
+    api_key = "2j3vo9xtbh" #input("please enter your Plotly Api Key: \n")
+    state = "2220"
+    radius = "30"
     for job in jobs:
-            url = "http://www.indeed.com/jobs?q=" + str(job) + "&l="+ str(state)+ "&rq=1&fromage=last"
+            url = "http://be.indeed.com/jobs?q=" + str(job) + "&l="+ str(state)+ "&radius=" + str(radius) + "&fromage=last"
+            print(url)
             response = u.urlopen(url)
 
             response = response.read()
             soup = BeautifulSoup(response, "html.parser")
             allowance = allow()
+
+            #print(soup.prettify())
+            print(job)
+            print(allowance)
 
             # Declaring the classes that have been used sequentially
             parser = Parser()
@@ -146,26 +155,26 @@ def main(jobs):
             items = parser.data_parse(allowance, soup, job)
 
             final = text.listed_jobs(job, soup)
-            print "-~"*50
-            print "-~"*50
-            print "the requested job was", job
-            print "-~"*50
-            print final
-            print "-~"*50
-            print "-~"*50
-            print "the requested job salary was "+job+" salary"
-            print "-~"*50
+            print("-~"*50)
+            print("-~"*50)
+            print("the requested job was", job)
+            print("-~"*50)
+            print(final)
+            print("-~"*50)
+            print("-~"*50)
+            print("the requested job salary was "+job+" salary")
+            print("-~"*50)
             wage_compiled = salary.salary_parser(soup)
-    print "\n"
-    print "-~"*50
-    print "-~"*50
-    print "The total number of jobs in each field is"
-    print "-~"*50
-    print items
+    print("\n")
+    print("-~"*50)
+    print("-~"*50)
+    print("The total number of jobs in each field is")
+    print("-~"*50)
+    print(items)
     # compares the total number of jobs visually on Plotly
     parser.graph_parsed_data(username, api_key)
 
     # runs the salary graph on Plotly
     salary.graphing_salary(username, api_key)
 
-main(["python analyst", "civil engineer", "python"])
+main(["process+engineer"])

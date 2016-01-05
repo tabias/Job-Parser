@@ -29,12 +29,12 @@ class SalaryEstimates:
                  'Quantity': pd.Series(quantity, index=['a', 'b', 'c', 'd', 'e'])}
             self.df5 = pd.DataFrame(d)
             self.df5 = self.df5.apply(pd.to_numeric, errors='coerce')
-            print self.df5
+            print(self.df5)
             df5_median =self.df5['Salary from jobs'].median()
             df5_mean = self.df5['Salary from jobs'].mean()
 
-            print "The median for this job is:", df5_median
-            print "The mean for this job is:", df5_mean
+            print("The median for this job is:", df5_median)
+            print("The mean for this job is:", df5_mean)
             return self.df5
 
     def graphing_salary(self, username, api_key):
