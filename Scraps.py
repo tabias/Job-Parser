@@ -17,7 +17,7 @@ Dict, profile, profile_company = {}, {}, {}
 location_list = []
 company_list = []
 job_title = []
-
+date_list = []
 
 def allow():
 
@@ -30,15 +30,17 @@ def allow():
     rp = robotparser.RobotFileParser()
     rp.set_url("http://be.indeed.com/robots.txt")
     rp.read()
-    access = rp.can_fetch("*","http://be.indeed.com/jobs?q=python+analyst&l=CA" )
+    access = rp.can_fetch("*","http://be.indeed.com/jobs?q=python%20analyst&l=CA" )
     return access
 
 
 class Parser:
     def __init__(self):
+        self.df = pd.DataFrame([])
         pass
 
     def data_parse(self, x, soup, job):
+        df = self.df
 
         '''
 
@@ -60,15 +62,12 @@ class Parser:
         # Once access is granted then the process starts parsing the data by first comparing the number/
         # of jobs available and returning the facts and figures.
         for text in soup.find_all("div", id="searchCount"):
-            self.data = str(text.get_text()).split(' ')[-1]
+            data = str(text.get_text()).split(' ')[-1]
             job2 = job.replace("+", " ")
-            Dict[job2] = self.data
-        print(Dict)
-        print(Dict)
 
-        self.df = pd.DataFrame(data = Dict, columns=['jobs', 'number of openings'])
-        #self.df = self.df.apply(pd.to_numeric, errors='ignore')
-        return self.df
+        df = df.append([job2, data])
+        df = df.apply(pd.to_numeric, errors='ignore')
+        return df
 
     def graph_parsed_data(self, username, api_key):
 
@@ -104,20 +103,25 @@ class TextParser:
             # job title
             jobs = post.find_all("a", {"class": "turnstileLink"})
 
-            job_contents = (job.get_text(' ', strip=True) for job in jobs)
+            job_contents = (job.get_text(' ', strip=True)[:30] for job in jobs)
             job_title.append(job_contents)
             #           company Name
             companies = post.find_all("span", {"itemprop":"name"})
-            company_content = (company.get_text(' ', strip=True) for company in companies)
+            company_content = (company.get_text(' ', strip=True)[:20] for company in companies)
             company_list.append(company_content)
             #           location
             locations = post.find_all("span", {"itemprop":"addressLocality"})
             locality = (location.get_text(' ', strip=True) for location in locations)
             location_list.append(locality)
+            # posting dat
+            dates = post.find_all("span", {"class":"date"})
+            date = (date.get_text(' ', strip=True).split(' ')[0] for date in dates)
+            date_list.append(date)
         # return location_list
         profile["Job Title"] =(list(itertools.chain.from_iterable(job_title)))
         profile["Location"] = (list(itertools.chain.from_iterable(location_list)))
         profile_company["Company"] = (list(itertools.chain.from_iterable(company_list)))
+        profile_company["Date"] = (list(itertools.chain.from_iterable(date_list)))
 
         # Turning the list into a panda DataFrame which will have 3 columns. These columns/
         # include jobtitle, job location, and Company
@@ -134,7 +138,7 @@ def main(jobs):
     state = "2220"
     radius = "30"
     for job in jobs:
-            url = "http://be.indeed.com/jobs?q=" + str(job) + "&l="+ str(state)+ "&radius=" + str(radius) + "&fromage=last"
+            url = "http://be.indeed.com/jobs?q=" + str(job).replace(' ','%2B') + "&l="+ str(state)+ "&radius=" + str(radius) + "&fromage=last&sort=date"
             print(url)
             response = u.urlopen(url)
 
@@ -149,7 +153,7 @@ def main(jobs):
             # Declaring the classes that have been used sequentially
             parser = Parser()
             text = TextParser()
-            salary = SalaryEstimates()
+            #salary = SalaryEstimates()
 
             # functions that are present in these classes respectively
             items = parser.data_parse(allowance, soup, job)
@@ -162,19 +166,20 @@ def main(jobs):
             print(final)
             print("-~"*50)
             print("-~"*50)
-            print("the requested job salary was "+job+" salary")
-            print("-~"*50)
-            wage_compiled = salary.salary_parser(soup)
-    print("\n")
+            # we don't have a salary posting so can't use it
+            #print("the requested job salary was "+job+" salary")
+            #print("-~"*50)
+            #wage_compiled = salary.salary_parser(soup)
+    #print("\n")
     print("-~"*50)
     print("-~"*50)
     print("The total number of jobs in each field is")
     print("-~"*50)
     print(items)
     # compares the total number of jobs visually on Plotly
-    parser.graph_parsed_data(username, api_key)
+    #parser.graph_parsed_data(username, api_key)
 
     # runs the salary graph on Plotly
-    salary.graphing_salary(username, api_key)
+    #salary.graphing_salary(username, api_key)
 
-main(["process+engineer"])
+main(["process engineer", "proces ingenieur",'maintenance engineer', "project ingenieur"])
