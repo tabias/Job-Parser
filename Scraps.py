@@ -1,22 +1,20 @@
 import itertools
-#import urllib2 as u
+
 import pandas as pd
 
 from urllib import robotparser
 from urllib import request as u
-import plotly.plotly as py
-import plotly.graph_objs as go
-import plotly.tools as tls
+from sys import exit
 
 from bs4 import BeautifulSoup
 
-from income import SalaryEstimates
 # The Required dictionaries to be used later on in the script.
 Dict, profile, profile_company = {}, {}, {}
 # Lists
 location_list = []
 company_list = []
 job_title = []
+job_urls = []
 date_list = []
 
 def allow():
@@ -37,11 +35,74 @@ def allow():
 class Parser:
     def __init__(self):
         self.df = pd.DataFrame([])
-        pass
+        self.url = ''
+        self.jobstats = pd.DataFrame([])
+        self.textdata = pd.DataFrame([])
 
-    def data_parse(self, x, soup, job):
-        df = self.df
+    def pull_job_all(self, job, region='2220', radius=30, date=True):
+        '''
 
+        :param job:
+        :param region:
+        :param radius:
+        :param date:
+        :return:
+        '''
+        jobstats = self.jobstats
+        textdata = self.textdata
+        # fetch the number of jobs
+        soup = self.pull_job(job, region, radius, date)
+        jobstats = jobstats.append(self.data_parse(soup, job))
+        textdata = textdata.append(self.list_jobs(soup, job))
+        for text in soup.find_all("div", id="searchCount"):
+            count = str(text.get_text()).split(' ')[-1] #strip only the last number so we know the total count
+        stop = int(count)//10
+        print('found {count} jobs for {job}'.format(job=job, count=count))
+        for page in range(10, stop*10, 10):
+            soup = self.pull_job(job, region, radius, date, page=page)
+            jobstats = jobstats.append(self.data_parse(soup, job), ignore_index=True)
+            #print(jobstats)
+            textdata = textdata.append(self.list_jobs(soup, job), ignore_index=True)
+        return jobstats, textdata
+
+    def pull_job(self, job, region='2220', radius=30, date=True, page=0):
+        '''
+
+        :param job: the job query we are searching
+        :param region: the region (postal code preferably we want Default = 2220
+        :param radius: what range we want to search for (km's) Default = 30
+        :param date: (bool) sorted according to date Default = True3
+        :param all: (bool) fetch them all Default = False
+        :return: return the soup for data parse
+        '''
+
+        #first check if we can actually access it
+        if not allow():
+            exit('Robot not allowed, quitting')
+
+        # check if we listed a job, else raise error
+        if not job:
+            raise ValueError('need a job')
+
+        # base url setting
+        url = "http://be.indeed.com/jobs?q="+ str(job).replace(' ','%2B') \
+                   + "&l="+ str(region) \
+                   + "&radius=" + str(radius) \
+                   + "&fromage=last"
+        if date:
+            url += '&sort=date'
+        if page:
+            url += '&start='+str(page)
+
+        response = u.urlopen(url)
+        response = response.read()
+        soup = BeautifulSoup(response, "html.parser")
+        #print(url)
+        #print(soup.prettify())
+
+        return soup
+
+    def data_parse(self, soup, job):
         '''
 
         :param x: x is the boolean parameter that is passed from the previous query with the robots.txt file./
@@ -54,56 +115,25 @@ class Parser:
 
         '''
 
-        # To check for access of the scraping process.
-        if not x:
-            print("defies the site rules")
-            quit()
+
 
         # Once access is granted then the process starts parsing the data by first comparing the number/
         # of jobs available and returning the facts and figures.
         for text in soup.find_all("div", id="searchCount"):
-            data = str(text.get_text()).split(' ')[-1]
+            data = str(text.get_text()).split(' ')[-1] #strip only the last number so we know the total count
             job2 = job.replace("+", " ")
 
-        df = df.append([job2, data])
-        df = df.apply(pd.to_numeric, errors='ignore')
-        return df
+        return [job2, data]
 
-    def graph_parsed_data(self, username, api_key):
-
-        '''
-         At this process the program will access the Plotly api and graph the features that/
-        were given by the first parsing process. The attributes that it will take in will be Api Username,
-        ApiPassword or api_key
-        :param username: this accesses is the api Username that you initially added in the first process.
-        :param api_key: this is the api key that you receive after registration.
-        :return: Final graph
-        '''
-
-        tls.set_credentials_file(username=username, api_key=api_key)
-        data = [
-            go.Scatter(
-                x=self.df['jobs'], # assign x as the dataframe column 'x'
-                y=self.df['number of openings']
-
-            )
-        ]
-        final_graph = py.plot(data, filename='pandas/basic-bar')
-        return final_graph
-
-
-class TextParser:
-
-    def __init__(self):
-        pass
-
-    def listed_jobs(self, jobs, soup):
+    def list_jobs(self, soup, job):
 
         for post in soup.find_all("div", {"class":"  row  result"}):
             # job title
             jobs = post.find_all("a", {"class": "turnstileLink"})
+            job_contents = (job.get_text(' ', strip=True)[:25] for job in jobs)
+            job_url = ('http://be.indeed.com'+job['href'] for job in jobs if job['href'])
 
-            job_contents = (job.get_text(' ', strip=True)[:30] for job in jobs)
+            job_urls.append(job_url)
             job_title.append(job_contents)
             #           company Name
             companies = post.find_all("span", {"itemprop":"name"})
@@ -111,7 +141,7 @@ class TextParser:
             company_list.append(company_content)
             #           location
             locations = post.find_all("span", {"itemprop":"addressLocality"})
-            locality = (location.get_text(' ', strip=True) for location in locations)
+            locality = (location.get_text(' ', strip=True)[:15] for location in locations)
             location_list.append(locality)
             # posting dat
             dates = post.find_all("span", {"class":"date"})
@@ -122,6 +152,7 @@ class TextParser:
         profile["Location"] = (list(itertools.chain.from_iterable(location_list)))
         profile_company["Company"] = (list(itertools.chain.from_iterable(company_list)))
         profile_company["Date"] = (list(itertools.chain.from_iterable(date_list)))
+        profile_company["url"] = (list(itertools.chain.from_iterable(job_urls)))
 
         # Turning the list into a panda DataFrame which will have 3 columns. These columns/
         # include jobtitle, job location, and Company
@@ -130,35 +161,31 @@ class TextParser:
         return df4
 
 
+
+
 # main module that manages all the other modules in the  script
 def main(jobs):
 
     username = "tabias@gmail.com" #input("please enter your Plotly Username: \n")
     api_key = "2j3vo9xtbh" #input("please enter your Plotly Api Key: \n")
-    state = "2220"
-    radius = "30"
+    local = "2220"
+    radius = "35"
     for job in jobs:
-            url = "http://be.indeed.com/jobs?q=" + str(job).replace(' ','%2B') + "&l="+ str(state)+ "&radius=" + str(radius) + "&fromage=last&sort=date"
-            print(url)
-            response = u.urlopen(url)
-
-            response = response.read()
-            soup = BeautifulSoup(response, "html.parser")
-            allowance = allow()
-
-            #print(soup.prettify())
-            print(job)
-            print(allowance)
-
             # Declaring the classes that have been used sequentially
             parser = Parser()
-            text = TextParser()
             #salary = SalaryEstimates()
 
             # functions that are present in these classes respectively
-            items = parser.data_parse(allowance, soup, job)
+            #soup = parser.pull_job(job)
+            #items = parser.data_parse(soup, job)
 
-            final = text.listed_jobs(job, soup)
+            items, final = parser.pull_job_all( job, region=local, radius=radius, date=True)
+            #write final to csv
+
+
+            final.to_excel(job+'.xlsx',index=False)
+
+            #final = parser.list_jobs(soup, job)
             print("-~"*50)
             print("-~"*50)
             print("the requested job was", job)
@@ -171,15 +198,16 @@ def main(jobs):
             #print("-~"*50)
             #wage_compiled = salary.salary_parser(soup)
     #print("\n")
-    print("-~"*50)
-    print("-~"*50)
-    print("The total number of jobs in each field is")
-    print("-~"*50)
-    print(items)
+    #print("-~"*50)
+    #print("-~"*50)
+    #print("The total number of jobs in each field is")
+    #print("-~"*50)
+    #print(items)
     # compares the total number of jobs visually on Plotly
     #parser.graph_parsed_data(username, api_key)
 
     # runs the salary graph on Plotly
     #salary.graphing_salary(username, api_key)
 
-main(["process engineer", "proces ingenieur",'maintenance engineer', "project ingenieur"])
+main(["process engineer",'maintenance engineer', 'project engineer', 'proces ingenieur'])
+#main(["proces ingenieur"])
