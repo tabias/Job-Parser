@@ -166,8 +166,8 @@ class Parser:
 # main module that manages all the other modules in the  script
 def main(jobs):
 
-    username = "tabias@gmail.com" #input("please enter your Plotly Username: \n")
-    api_key = "2j3vo9xtbh" #input("please enter your Plotly Api Key: \n")
+    username = input("please enter your Plotly Username: \n")
+    api_key = input("please enter your Plotly Api Key: \n")
     local = "2220"
     radius = "35"
     for job in jobs:
